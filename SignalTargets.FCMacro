@@ -1,0 +1,269 @@
+#*****************************************************************************
+#
+#  System        : 
+#  Module        : 
+#  Object Name   : $RCSfile$
+#  Revision      : $Revision$
+#  Date          : $Date$
+#  Author        : $Author$
+#  Created By    : Robert Heller
+#  Created       : 2026-02-09 13:44:14
+#  Last Modified : <260209.1656>
+#
+#  Description	
+#
+#  Notes
+#
+#  History
+#	
+#*****************************************************************************
+#
+#    Copyright (C) 2026  Robert Heller D/B/A Deepwoods Software
+#			51 Locke Hill Road
+#			Wendell, MA 01379-9728
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+# 
+#
+#*****************************************************************************
+
+
+import FreeCAD as App
+import Part, TechDraw, Mesh
+from FreeCAD import Base
+
+import os
+import sys
+sys.path.append(os.path.dirname(__file__))
+import csv
+import math
+
+def debug(fmt,*args):
+    print(fmt % args,file=sys.stderr)
+
+
+class Target(object):
+    __backing3Radius = 4.7
+    __backing3Height = 16.8
+    __backing2Radius = 4.8
+    __backing2Height = 13.5
+    __1LampBackingDiameter = 10.3
+    __backingThickness = 0.8
+    __2LampSpacing = 5
+    __3LampSpacing = 4.3
+    __backWidth = 5.5
+    __1backWidth = 5.8
+    __backDepth = 2.4
+    __backCutDepth = 1.5
+    __1backHeight = 5.9
+    __2backHeight = 10
+    __3backHeight = 14.5
+    __backLedgeWidth = 0.8
+    __back1LedgeWidthY = 1
+    __back1LedgeWidthX = .9
+    __lampHoleDiameter = 3
+    __hoodOuterDiameter = 4
+    __hoodLength = 7.1-(.8+2.4)
+    __hoodZOff   = 2.4+.8
+    __totalThickness = 7.1
+    def __init__(self,origin,name,lamps=1):
+        self.name = name
+        if not isinstance(origin,Base.Vector):
+            raise RuntimeError("origin is not a Vector!")
+        self.origin = origin
+        if lamps == 1: 
+            backO = origin.add(Base.Vector(-self.__1backWidth/2,-self.__1backHeight/2,0))
+            back = Part.makePlane(self.__1backWidth,self.__1backHeight,backO)\
+                    .extrude(Base.Vector(0,0,self.__backDepth))
+            backCut = Part.makePlane(self.__1backWidth-(2*self.__back1LedgeWidthX),
+                                     self.__1backHeight-(2*self.__back1LedgeWidthY),
+                                     backO.add(Base.Vector(self.__back1LedgeWidthX,
+                                                           self.__back1LedgeWidthY,
+                                                           0)))\
+                     .extrude(Base.Vector(0,0,self.__backCutDepth))
+            back = back.cut(backCut)
+            backingO = origin.add(Base.Vector(0,0,self.__backDepth))
+            backing = Part.makeCylinder(self.__1LampBackingDiameter/2,
+                                        self.__backingThickness,
+                                        backingO)
+            self.target = back.fuse(backing)
+            self.__hoodAt(origin)
+            self.target = self.target.cut(
+                    Part.makeCylinder(self.__lampHoleDiameter/2,
+                                      self.__totalThickness,
+                                      Base.Vector(origin.x,origin.y,backO.z))
+                    )
+        elif lamps == 2:
+            backO = origin.add(Base.Vector(-self.__backWidth/2,-self.__2backHeight/2,0))
+            back = Part.makePlane(self.__backWidth,self.__2backHeight,backO)\
+                   .extrude(Base.Vector(0,0,self.__backDepth))
+            backCut = Part.makePlane(self.__backWidth-(2*self.__backLedgeWidth),
+                                     self.__2backHeight-(2*self.__backLedgeWidth),
+                                     backO.add(Base.Vector(self.__backLedgeWidth,
+                                                           self.__backLedgeWidth,
+                                                           0)))\
+                    .extrude(Base.Vector(0,0,self.__backCutDepth))
+            back = back.cut(backCut)
+            offset = (self.__backing2Height - (2*self.__backing2Radius))/2
+            backingOR1 = origin.add(
+                Base.Vector(0,
+                            offset,
+                            self.__backDepth))
+            backingOR2 = origin.add(
+                Base.Vector(0,
+                            -offset,
+                            self.__backDepth))
+            backing = Part.makeCylinder(self.__backing2Radius,
+                                         self.__backingThickness,
+                                         backingOR1)
+            backing = backing.fuse(
+                            Part.makeCylinder(self.__backing2Radius,
+                                              self.__backingThickness,
+                                              backingOR2)
+                                    )
+            backing = backing.fuse(
+                            Part.makePlane(
+                                self.__backing2Radius*2,
+                                backingOR1.y-backingOR2.y,
+                                backingOR2.add(Base.Vector(-self.__backing2Radius,0,0)))\
+                              .extrude(Base.Vector(0,0,self.__backingThickness))
+                            )
+            self.target = back.fuse(backing) 
+            self.__hoodAt(origin.add(Base.Vector(0,-self.__2LampSpacing/2,0)))
+            self.target = self.target.cut(
+                Part.makeCylinder(self.__lampHoleDiameter/2,
+                                  self.__totalThickness,
+                                  Base.Vector(origin.x,
+                                        origin.y-self.__2LampSpacing/2,
+                                        backO.z))
+                )
+            self.__hoodAt(origin.add(Base.Vector(0,+self.__2LampSpacing/2,0)))
+            self.target = self.target.cut(
+                Part.makeCylinder(self.__lampHoleDiameter/2,
+                                  self.__totalThickness,
+                                  Base.Vector(origin.x,
+                                        origin.y+self.__2LampSpacing/2,
+                                        backO.z))
+                )
+        elif lamps == 3:
+            backO = origin.add(Base.Vector(-self.__backWidth/2,-self.__3backHeight/2,0))
+            back = Part.makePlane(self.__backWidth,self.__3backHeight,backO)\
+                   .extrude(Base.Vector(0,0,self.__backDepth))
+            backCut = Part.makePlane(self.__backWidth-(2*self.__backLedgeWidth),
+                                     self.__3backHeight-(2*self.__backLedgeWidth),
+                                     backO.add(Base.Vector(self.__backLedgeWidth,
+                                                           self.__backLedgeWidth,
+                                                           0)))\
+                    .extrude(Base.Vector(0,0,self.__backCutDepth))
+            back = back.cut(backCut)
+            offset = (self.__backing3Height - (2*self.__backing3Radius))/2
+            backingOR1 = origin.add(
+                Base.Vector(0,
+                            offset,
+                            self.__backDepth))
+            backingOR2 = origin.add(
+                Base.Vector(0,
+                            -offset,
+                            self.__backDepth))
+            backing = Part.makeCylinder(self.__backing3Radius,
+                                         self.__backingThickness,
+                                         backingOR1)
+            backing = backing.fuse(
+                            Part.makeCylinder(self.__backing3Radius,
+                                              self.__backingThickness,
+                                              backingOR2)
+                                    )
+            backing = backing.fuse(
+                            Part.makePlane(
+                                self.__backing3Radius*2,
+                                backingOR1.y-backingOR2.y,
+                                backingOR2.add(Base.Vector(-self.__backing3Radius,0,0)))\
+                              .extrude(Base.Vector(0,0,self.__backingThickness))
+                            )
+            self.target = back.fuse(backing)
+            self.__hoodAt(origin.add(Base.Vector(0,-self.__3LampSpacing,0)))
+            self.target = self.target.cut(
+                Part.makeCylinder(self.__lampHoleDiameter/2,
+                                  self.__totalThickness,
+                                  Base.Vector(origin.x,
+                                              origin.y-self.__3LampSpacing,
+                                              backO.z))
+                )
+            self.__hoodAt(origin)
+            self.target = self.target.cut(
+                Part.makeCylinder(self.__lampHoleDiameter/2,
+                                  self.__totalThickness,
+                                  Base.Vector(origin.x,
+                                              origin.y,
+                                              backO.z))
+                )
+            self.__hoodAt(origin.add(Base.Vector(0,self.__3LampSpacing,0)))
+            self.target = self.target.cut(
+                Part.makeCylinder(self.__lampHoleDiameter/2,
+                                  self.__totalThickness,
+                                  Base.Vector(origin.x,
+                                              origin.y+self.__3LampSpacing,
+                                              backO.z))
+                )
+        else:
+            raise RuntimeError("lamps must be 1, 2, or 3")
+    def __hoodAt(self,horigin):
+        hoodCylinder = Part.makeCylinder(self.__hoodOuterDiameter/2,
+                                        self.__hoodLength,
+                                        horigin.add(Base.Vector(0,0,self.__hoodZOff)))
+        hood1cut = Part.makePlane(self.__hoodOuterDiameter,
+                                  self.__hoodOuterDiameter,
+                                  horigin.add(Base.Vector(-self.__hoodOuterDiameter/2,
+                                                          -self.__hoodOuterDiameter,
+                                                          0)))\
+                         .extrude(Base.Vector(0,0,self.__totalThickness))
+        hoodCylinder = hoodCylinder.cut(hood1cut)
+        hood1cut = Part.makePlane(self.__hoodOuterDiameter,
+                                  self.__hoodOuterDiameter,
+                                  horigin.add(Base.Vector(-self.__hoodOuterDiameter/2,
+                                                          0,
+                                                          self.__totalThickness)))\
+                          .extrude(Base.Vector(0,0,-self.__hoodOuterDiameter/2))
+        cut2 = Part.makeCylinder(self.__hoodOuterDiameter/2,
+                              self.__hoodOuterDiameter,
+                              horigin.add(Base.Vector(-self.__hoodOuterDiameter/2,
+                                                      self.__hoodOuterDiameter/2,
+                                                      self.__totalThickness-self.__hoodOuterDiameter/2)),
+                              Base.Vector(1,0,0))
+        hood1cut = hood1cut.cut(cut2)
+        hoodCylinder = hoodCylinder.cut(hood1cut)
+        self.target = self.target.fuse(hoodCylinder)
+    def show(self,doc=None):
+        if doc==None:
+            doc = App.activeDocument()
+        obj = doc.addObject("Part::Feature",self.name)
+        obj.Shape = self.target
+        obj.Label=self.name
+        obj.ViewObject.ShapeColor=(0.0,0.0,0.0)
+
+if __name__ == '__main__':
+    if "Targets" in App.listDocuments().keys():
+        App.closeDocument("Targets")
+    doc = App.newDocument("Targets")
+    doc = App.activeDocument()
+    target1 = Target(Base.Vector(-50,0,0),"One",1)
+    target1.show(doc)
+    target2 = Target(Base.Vector(0,0,0),"Two",2)
+    target2.show(doc)
+    target3 = Target(Base.Vector(50,0,0),"Three",3)
+    target3.show(doc)
+    Gui.activeDocument().activeView().viewTop()
+    Gui.SendMsgToActiveView("ViewFit")        
