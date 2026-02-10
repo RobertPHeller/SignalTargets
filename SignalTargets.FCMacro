@@ -8,7 +8,7 @@
 #  Author        : $Author$
 #  Created By    : Robert Heller
 #  Created       : 2026-02-09 13:44:14
-#  Last Modified : <260209.1656>
+#  Last Modified : <260210.0956>
 #
 #  Description	
 #
@@ -44,6 +44,7 @@
 import FreeCAD as App
 import Part, TechDraw, Mesh
 from FreeCAD import Base
+import Mesh
 
 import os
 import sys
@@ -253,7 +254,18 @@ class Target(object):
         obj.Shape = self.target
         obj.Label=self.name
         obj.ViewObject.ShapeColor=(0.0,0.0,0.0)
-
+    def makeSTL(self,filename=None):
+        if filename==None:
+            filename=self.name+".stl"
+        doc = App.activeDocument()
+        obj = doc.addObject("Part::Feature","temp")
+        obj.Shape=self.target
+        objs = list()
+        objs.append(obj)
+        Mesh.export(objs,filename)
+        doc.removeObject(obj.Label)
+        
+                                    
 if __name__ == '__main__':
     if "Targets" in App.listDocuments().keys():
         App.closeDocument("Targets")
@@ -261,9 +273,12 @@ if __name__ == '__main__':
     doc = App.activeDocument()
     target1 = Target(Base.Vector(-50,0,0),"One",1)
     target1.show(doc)
+    target1.makeSTL()
     target2 = Target(Base.Vector(0,0,0),"Two",2)
     target2.show(doc)
+    target2.makeSTL()
     target3 = Target(Base.Vector(50,0,0),"Three",3)
     target3.show(doc)
+    target3.makeSTL()
     Gui.activeDocument().activeView().viewTop()
     Gui.SendMsgToActiveView("ViewFit")        
